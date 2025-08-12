@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hangman - Game Tebak Kata Menantang</title>
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8668394473942785"
+     crossorigin="anonymous"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Roboto+Mono:wght@400;700&display=swap');
+
+        :root {
+            --primary-color: #ffb74d;
+            --secondary-color: #90caf9;
+            --background-color: #1a1a2e;
+            --card-background: #242940;
+            --correct-color: #4CAF50;
+            --wrong-color: #ff6b6b;
+            --keyboard-bg: #4a4f66;
+            --keyboard-hover: #5a5f77;
+            --keyboard-text: #fff;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--background-color);
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .game-container {
+            background-color: var(--card-background);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+            text-align: center;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            font-size: 2.8rem;
+            margin-bottom: 10px;
+            color: var(--primary-color);
+        }
+
+        p {
+            font-size: 1rem;
+            color: #aaa;
+            margin-bottom: 20px;
+        }
+
+        #hangman-canvas {
+            background-color: var(--background-color);
+            border: 2px solid var(--secondary-color);
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        #word-display {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 2.5rem;
+            letter-spacing: 10px;
+            margin: 20px 0;
+            min-height: 40px;
+            text-transform: uppercase;
+        }
+
+        #status-message {
+            font-size: 1.2rem;
+            font-weight: bold;
+            min-height: 30px;
+            margin: 20px 0;
+        }
+
+        #keyboard-container {
+            margin-top: 20px;
+        }
+
+        .keyboard-row {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            margin-bottom: 5px;
+        }
+
+        .keyboard-button {
+            padding: 10px;
+            font-size: 1.1rem;
+            min-width: 40px;
+            border-radius: 8px;
+            background-color: var(--keyboard-bg);
+            color: var(--keyboard-text);
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: bold;
+        }
+
+        .keyboard-button:hover:not(.guessed) {
+            background-color: var(--keyboard-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .keyboard-button.correct {
+            background-color: var(--correct-color);
+            color: #fff;
+            cursor: not-allowed;
+        }
+
+        .keyboard-button.wrong {
+            background-color: var(--wrong-color);
+            color: #fff;
+            cursor: not-allowed;
+        }
+
+        .keyboard-button.guessed {
+            opacity: 0.6;
+        }
+
+        #reset-button {
+            background: linear-gradient(45deg, var(--secondary-color), #4db6ac);
+            color: #fff;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+            display: none;
+        }
+
+        #reset-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(144, 202, 249, 0.4);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <h1>Hangman</h1>
+        <p>Tebak kata rahasia yang lebih menantang!</p>
+
+        <!-- Canvas untuk menggambar Hangman -->
+        <canvas id="hangman-canvas" width="300" height="250"></canvas>
+
+        <!-- Tampilan Kata -->
+        <div id="word-display"></div>
+
+        <!-- Pesan Status -->
+        <div id="status-message">Mulai menebak dengan mengetik huruf!</div>
+
+        <!-- Keyboard Virtual -->
+        <div id="keyboard-container"></div>
+
+        <!-- Tombol Reset -->
+        <button id="reset-button">Mulai Ulang</button>
+    </div>
+
+    <script>
+        // Daftar kata yang lebih menantang dan lebih familiar
+        const words = [
+            "jendela", "komputer", "sekolah", "mahasiswa", "pedagang", "perpustakaan",
+            "persahabatan", "petualangan", "pelangi", "sungai", "gunung", "keheningan",
+            "kebahagiaan", "senyum", "lautan", "pemandangan", "tumbuhan", "perjalanan",
+            "cerita", "keramaian", "kenangan", "pengalaman", "kendaraan", "samudra",
+            "perusahaan", "universitas", "pembangunan", "kemerdekaan", "pendidikan",
+            "perdagangan", "pemerintahan", "perkembangan", "pengetahuan", "masyarakat",
+            "persatuan", "kerajaan", "peradaban", "kreativitas", "inovasi",
+            "kesempurnaan", "keberhasilan", "kedamaian", "kecantikan", "lingkungan",
+            "peternakan", "perkebunan", "petualang", "penjelajah", "perkakas",
+            "pernikahan", "perpisahan", "kekayaan", "kesabaran", "kerjasama"
+        ];
+
+        // State game
+        let secretWord = "";
+        let guessedLetters = [];
+        let wrongGuesses = 0;
+        const maxWrongGuesses = 6;
+        let isGameOver = false;
+
+        // Elemen DOM
+        const canvas = document.getElementById('hangman-canvas');
+        const ctx = canvas.getContext('2d');
+        const wordDisplay = document.getElementById('word-display');
+        const statusMessage = document.getElementById('status-message');
+        const keyboardContainer = document.getElementById('keyboard-container');
+        const resetButton = document.getElementById('reset-button');
+
+        // Buat keyboard virtual
+        const keyboardLayout = [
+            ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
+            ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
+            ['Z', 'X', 'C', 'V', 'B', 'N', 'M']
+        ];
+
+        // Fungsi untuk membuat suara
+        function playSound(frequency, duration, volume) {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.type = 'sine';
+            oscillator.frequency.value = frequency;
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            gainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + duration);
+        }
+
+        // Fungsi untuk menggambar Hangman
+        function drawHangman() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Bersihkan canvas
+
+            // Gaya gambar
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+
+            // Tahap 1: Tiang Gantung (selalu ada)
+            ctx.beginPath();
+            ctx.moveTo(30, 240);
+            ctx.lineTo(200, 240);
+            ctx.moveTo(50, 240);
+            ctx.lineTo(50, 10);
+            ctx.lineTo(150, 10);
+            ctx.lineTo(150, 40);
+            ctx.stroke();
+            ctx.closePath();
+
+            // Tahap 2-7: Bagian tubuh
+            if (wrongGuesses > 0) {
+                // Kepala
+                ctx.beginPath();
+                ctx.arc(150, 60, 20, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.closePath();
+            }
+            if (wrongGuesses > 1) {
+                // Badan
+                ctx.beginPath();
+                ctx.moveTo(150, 80);
+                ctx.lineTo(150, 150);
+                ctx.stroke();
+                ctx.closePath();
+            }
+            if (wrongGuesses > 2) {
+                // Tangan kiri
+                ctx.beginPath();
+                ctx.moveTo(150, 90);
+                ctx.lineTo(120, 130);
+                ctx.stroke();
+                ctx.closePath();
+            }
+            if (wrongGuesses > 3) {
+                // Tangan kanan
+                ctx.beginPath();
+                ctx.moveTo(150, 90);
+                ctx.lineTo(180, 130);
+                ctx.stroke();
+                ctx.closePath();
+            }
+            if (wrongGuesses > 4) {
+                // Kaki kiri
+                ctx.beginPath();
+                ctx.moveTo(150, 150);
+                ctx.lineTo(120, 190);
+                ctx.stroke();
+                ctx.closePath();
+            }
+            if (wrongGuesses > 5) {
+                // Kaki kanan
+                ctx.beginPath();
+                ctx.moveTo(150, 150);
+                ctx.lineTo(180, 190);
+                ctx.stroke();
+                ctx.closePath();
+            }
+        }
+
+        // Fungsi untuk memperbarui tampilan kata
+        function updateWordDisplay() {
+            let displayedWord = "";
+            for (const char of secretWord) {
+                if (guessedLetters.includes(char)) {
+                    displayedWord += char;
+                } else {
+                    displayedWord += "_";
+                }
+            }
+            wordDisplay.textContent = displayedWord.split("").join(" ");
+        }
+
+        // Fungsi untuk menginisialisasi keyboard
+        function createKeyboard() {
+            keyboardContainer.innerHTML = '';
+            keyboardLayout.forEach(row => {
+                const rowDiv = document.createElement('div');
+                rowDiv.classList.add('keyboard-row');
+                row.forEach(key => {
+                    const button = document.createElement('button');
+                    button.classList.add('keyboard-button');
+                    button.textContent = key;
+                    button.dataset.key = key.toLowerCase();
+                    rowDiv.appendChild(button);
+                });
+                keyboardContainer.appendChild(rowDiv);
+            });
+        }
+
+        // Fungsi untuk menangani tebakan
+        function handleGuess(letter) {
+            if (isGameOver || guessedLetters.includes(letter)) {
+                return;
+            }
+
+            guessedLetters.push(letter);
+            const keyButton = document.querySelector(`.keyboard-button[data-key="${letter}"]`);
+            if (keyButton) {
+                keyButton.classList.add('guessed');
+            }
+
+            if (secretWord.includes(letter)) {
+                // Tebakan benar
+                playSound(523.25, 0.2, 0.5); // Suara benar
+                updateWordDisplay();
+                if (keyButton) {
+                    keyButton.classList.add('correct');
+                }
+            } else {
+                // Tebakan salah
+                wrongGuesses++;
+                playSound(392, 0.2, 0.5); // Suara salah
+                drawHangman();
+                if (keyButton) {
+                    keyButton.classList.add('wrong');
+                }
+            }
+
+            checkGameStatus();
+        }
+
+        // Fungsi untuk memeriksa status permainan (menang/kalah)
+        function checkGameStatus() {
+            let win = true;
+            for (const char of secretWord) {
+                if (!guessedLetters.includes(char)) {
+                    win = false;
+                    break;
+                }
+            }
+
+            if (win) {
+                statusMessage.textContent = `Selamat, kamu menang! Kata rahasianya adalah: ${secretWord.toUpperCase()}`;
+                statusMessage.style.color = '#4CAF50'; // Menggunakan kode hex langsung
+                isGameOver = true;
+                resetButton.style.display = 'block';
+                playSound(659.25, 0.5, 0.8); // Suara kemenangan
+            } else if (wrongGuesses >= maxWrongGuesses) {
+                statusMessage.textContent = `Kamu kalah! Kata rahasianya adalah: ${secretWord.toUpperCase()}`;
+                statusMessage.style.color = '#ff6b6b'; // Menggunakan kode hex langsung
+                isGameOver = true;
+                resetButton.style.display = 'block';
+                playSound(220, 0.5, 0.8); // Suara kekalahan
+            }
+        }
+
+        // Fungsi untuk memulai permainan
+        function startGame() {
+            // Reset state
+            secretWord = words[Math.floor(Math.random() * words.length)];
+            guessedLetters = [];
+            wrongGuesses = 0;
+            isGameOver = false;
+
+            // Reset UI
+            statusMessage.textContent = "Mulai menebak dengan mengetik huruf!";
+            statusMessage.style.color = '#fff';
+            resetButton.style.display = 'none';
+
+            // Bersihkan keyboard
+            const keyboardButtons = document.querySelectorAll('.keyboard-button');
+            keyboardButtons.forEach(button => {
+                button.classList.remove('guessed', 'correct', 'wrong');
+            });
+
+            drawHangman();
+            updateWordDisplay();
+        }
+
+        // Event listener untuk keyboard fisik
+        document.addEventListener('keydown', (e) => {
+            const letter = e.key.toLowerCase();
+            if (letter.match(/^[a-z]$/)) {
+                handleGuess(letter);
+            }
+        });
+
+        // Event listener untuk keyboard virtual
+        keyboardContainer.addEventListener('click', (e) => {
+            if (e.target.classList.contains('keyboard-button')) {
+                const letter = e.target.dataset.key;
+                handleGuess(letter);
+            }
+        });
+
+        // Event listener untuk tombol reset
+        resetButton.addEventListener('click', startGame);
+
+        // Mulai permainan saat halaman dimuat
+        window.onload = function() {
+            createKeyboard();
+            startGame();
+        };
+    </script>
+</body>
+</html>
